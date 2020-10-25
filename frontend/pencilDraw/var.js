@@ -2,48 +2,42 @@ module.exports = function (data, api) {
     let {width, height} = api.getDimensions();
 
     const length = width * height;
-    const getColor = ([r,g,b]) => {
+    const getColor = (r,g,b) => {
         return (r + g + b) / 3;
     }
 
-    function getValueFactory(mathFunction) {
-        return initialValue => {
-            const res = new Uint8ClampedArray(length);
-            for (let y = 1; y < height - 1; y++) {
-                for (let x = 1; x < width - 1; x++) {
-                    let value = initialValue;
-                    for (let i = -1; i <= 1; i++) {
-                        let prevLine = data.slice(4 * (y - 1) * width, (y * width) * 4),
-                            curLine = data.slice(4 * y * width, ((y + 1) * width) * 4),
-                            nextLine = data.slice(4 * (y + 1) * width, ((y + 2) * width) * 4);
+    function getValue() {
+        const res = new Uint8ClampedArray(length);
+        for (let y = 1; y < height - 1; y++) {
+            const lenY = 4 * (y - 1) * width;
+            for (let x = 1; x < width - 1; x++) {
+                let v0 = 0;
+                let v255 = 255;
+                for (let i = -1; i <= 1; i++) {
+                    const lenX = 4 * (i + x);
+                    const len1 = lenY + lenX;
+                    const len2 = lenY + lenX + width * 4;
+                    const len3 = lenY + lenX + width * 8;
+                    const col1 = getColor(data[len1], data[len1+1], data[len1+2]);
+                    const col2 = getColor(data[len2], data[len2+1], data[len2+2]);
+                    const col3 = getColor(data[len3], data[len3+1], data[len3+2]);
 
-                        value = mathFunction(
-                            value,
-                            getColor(prevLine.slice(4 * (i + x), 4 * (i + x) + 3)),
-                            getColor(curLine.slice(4 * (i + x), 4 * (i + x) + 3)),
-                            getColor(nextLine.slice(4 * (i + x), 4 * (i + x) + 3))
-                        );
-                    }
-                    res[y * width + x] = value;
+                    v0 = Math.max(v0, col1, col2, col3);
+                    v255 = Math.min(v255, col1, col2, col3);
                 }
+                res[y * width + x] = v0 - v255;
             }
-            return res;
-        };
+        }
+        return res;
     }
 
-    const getMinimums = getValueFactory(Math.min),
-        getMaximums = getValueFactory(Math.max);
-
-    const res = new Uint8ClampedArray(length);
+    const res = getValue();
 
     for (let i = 0; i < length; i++) {
-        res[i] = getMaximums(0)[i] - getMinimums(255)[i];
-    }
-
-    for (let i = 0; i < length; i++) {
-        data[4 * i] = 255 - res[i];
-        data[4 * i + 1] = 255 - res[i];
-        data[4 * i + 2] = 255 - res[i];
+        const r = 255 - res[i];
+        data[4 * i] = r;
+        data[4 * i + 1] = r;
+        data[4 * i + 2] = r;
     }
 
     return Promise.resolve(data);

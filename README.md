@@ -1,1 +1,1 @@
-# yacup2020
+#	Yandex Cup 2020
